@@ -1,0 +1,12 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-media-image": {
+                "name": "Image",
+                "empty": "Please configure an image",
+                "loading": "Loading image",
+                "error": "Failed to load image"
+            }
+        }
+    }
+}

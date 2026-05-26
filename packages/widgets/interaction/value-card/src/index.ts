@@ -1,0 +1,530 @@
+import { metadata } from './metadata';
+import { PropsSchema, getDefaultProps, type Props } from './schema';
+import { controls } from './controls';
+import { createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import * as LucideIcons from 'lucide-react';
+import {
+  defineWidget,
+  resolveLayeredColor,
+  type WidgetOverlayContext,
+  resolveWidgetColors,
+  type WidgetColors,
+} from '@thingsvis/widget-sdk';
+
+import zh from './locales/zh.json';
+import en from './locales/en.json';
+
+// ============================================================================
+// Constants
+// ============================================================================
+const DEFAULT_CARD_WIDTH = 160;
+const DEFAULT_CARD_HEIGHT = 80;
+const DEFAULT_CARD_PADDING_X = 16;
+const DEFAULT_CARD_PADDING_Y = 16;
+const TREND_COLOR_POSITIVE = '#22c55e';
+const TREND_COLOR_NEGATIVE = '#ef4444';
+const MIN_ICON_BADGE_SIZE = 16;
+const MIN_ICON_FONT_SIZE = 10;
+const MIN_ICON_GLYPH_SIZE = 12;
+const DEFAULT_ICON_STROKE_WIDTH = 2.25;
+const ICON_SLOT_SELECTOR = '[data-value-card-icon-slot="true"]';
+
+// ============================================================================
+// Utils
+// ============================================================================
+function escapeHtml(input: unknown): string {
+  return String(input ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatValue(value: unknown, precision: number, useGrouping: boolean): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return String(value);
+
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: precision,
+    maximumFractionDigits: precision,
+    useGrouping,
+  }).format(num);
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const clamped = Math.max(0, Math.min(1, alpha));
+  const normalized = color.trim();
+  const hexMatch = normalized.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+  if (hexMatch?.[1]) {
+    const hex = hexMatch[1];
+    const fullHex = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+    const num = Number.parseInt(fullHex, 16);
+    const r = (num >> 16) & 255;
+    const g = (num >> 8) & 255;
+    const b = num & 255;
+    return `rgba(${r}, ${g}, ${b}, ${clamped})`;
+  }
+  const rgbMatch = normalized.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch?.[1]) {
+    const parts = rgbMatch[1].split(',').map(p => p.trim());
+    if (parts.length >= 3) {
+      return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${clamped})`;
+    }
+  }
+  return normalized;
+}
+
+function isTransparentColor(color: string | undefined): boolean {
+  const normalized = String(color ?? '').trim().toLowerCase();
+  if (!normalized || normalized === 'transparent') return true;
+
+  const rgbaMatch = normalized.match(/^rgba?\(([^)]+)\)$/);
+  if (!rgbaMatch?.[1]) return false;
+
+  const parts = rgbaMatch[1].split(',').map(part => part.trim());
+  if (parts.length < 4) return false;
+
+  const alpha = Number(parts[3]);
+  return Number.isFinite(alpha) && alpha <= 0;
+}
+
+function hasConfiguredBackground(ctx: WidgetOverlayContext): boolean {
+  const background = ctx.baseStyle?.background;
+  if (!background) return false;
+  if (background.opacity === 0) return false;
+  return !isTransparentColor(background.color) || !!String(background.image ?? '').trim();
+}
+
+function shouldCollapseDefaultPadding(ctx: WidgetOverlayContext): boolean {
+  const background = ctx.baseStyle?.background;
+  if (!background) return false;
+  return !hasConfiguredBackground(ctx);
+}
+
+function iconComponentNameFromValue(icon: string): string {
+  const trimmed = icon.trim();
+  if (!trimmed) return '';
+
+  const raw = trimmed.startsWith('i-lucide:') ? trimmed.slice('i-lucide:'.length) : trimmed;
+  return raw
+    .split(/[-_:]/g)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+function resolveIconComponent(icon: string): LucideIcons.LucideIcon | null {
+  const iconName = iconComponentNameFromValue(icon);
+  if (!iconName) return null;
+
+  const iconRegistry = LucideIcons as unknown as Record<string, LucideIcons.LucideIcon | undefined>;
+  const iconComponent = iconRegistry[iconName];
+  return iconComponent ?? null;
+}
+
+function iconLabelFromValue(icon: string): string {
+  const trimmed = icon.trim();
+  if (!trimmed) return '';
+
+  const raw = trimmed.startsWith('i-lucide:') ? trimmed.slice('i-lucide:'.length) : trimmed;
+  const words = raw
+    .split(/[-_:]/g)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  if (words.length === 0) return '';
+
+  // Multi-word: take first letter of first 2 words (e.g. "bar-chart" → "BC")
+  if (words.length >= 2) {
+    return words.slice(0, 2).map(w => w.charAt(0).toUpperCase()).join('');
+  }
+
+  // Single-word: take first 2 characters (e.g. "box" → "BO")
+  const word = words[0] ?? '';
+  return word.length >= 2
+    ? word.substring(0, 2).toUpperCase()
+    : word.charAt(0).toUpperCase();
+}
+
+function renderIconBadgeFrame(contentHtml: string, badgeSize: number): string {
+  return `
+    <div style="
+      width: ${badgeSize}px;
+      height: ${badgeSize}px;
+      min-width: ${badgeSize}px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: currentColor;
+      background: currentColor;
+      opacity: 0.9;
+      position: relative;
+      overflow: hidden;
+    ">
+      ${contentHtml}
+    </div>
+  `;
+}
+
+// ============================================================================
+// Render helpers
+// ============================================================================
+function renderTrendBadge(trend: number, fontSize: number, positiveColor: string, negativeColor: string): string {
+  if (trend === 0) return '';
+  const isPositive = trend > 0;
+  const color = isPositive ? positiveColor : negativeColor;
+  const sign = isPositive ? '+' : '';
+  const arrow = isPositive ? '▲' : '▼';
+  const displayTrend = `${sign}${trend.toFixed(2)}%`;
+
+  return `
+    <div style="
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: ${Math.max(10, fontSize - 2)}px;
+      font-weight: 600;
+      color: ${color};
+      background: ${withAlpha(color, 0.1)};
+      white-space: nowrap;
+      flex-shrink: 0;
+    ">
+      <span style="font-size: ${Math.max(8, fontSize - 4)}px;">${arrow}</span>
+      ${escapeHtml(displayTrend)}
+    </div>
+  `;
+}
+
+// ============================================================================
+// Render
+// ============================================================================
+function renderCard(element: HTMLElement, props: Props, colors: WidgetColors, ctx: WidgetOverlayContext): Root | null {
+  const {
+    title, prefix, value, suffix, subtitle, trend, precision,
+    icon, iconPosition, iconSize,
+    titleFontSize, valueFontSize, suffixFontSize, subtitleFontSize,
+    titleColor: titleColorProp,
+    valueColor: valueColorProp,
+    subtitleColor: subtitleColorProp,
+    iconColor: iconColorProp,
+    iconBackgroundColor: iconBackgroundColorProp,
+    trendUpColor: trendUpColorProp,
+    trendDownColor: trendDownColorProp,
+    align
+  } = props;
+
+  const collapseDefaultPadding = shouldCollapseDefaultPadding(ctx);
+  const paddingX = collapseDefaultPadding ? 0 : DEFAULT_CARD_PADDING_X;
+  const paddingY = collapseDefaultPadding ? 0 : DEFAULT_CARD_PADDING_Y;
+  const titleSize = titleFontSize;
+  const mainValueSize = valueFontSize;
+  const unitSize = suffixFontSize;
+  const subTitleSize = subtitleFontSize;
+  const contentGap = 8;
+  const titleColor = resolveLayeredColor({
+    instance: titleColorProp,
+    theme: withAlpha(colors.fg, 0.72),
+    fallback: withAlpha(colors.fg, 0.72),
+  });
+  const valueColor = resolveLayeredColor({
+    instance: valueColorProp,
+    theme: colors.fg,
+    fallback: colors.fg,
+  });
+  const subtitleColor = resolveLayeredColor({
+    instance: subtitleColorProp,
+    theme: withAlpha(colors.fg, 0.55),
+    fallback: withAlpha(colors.fg, 0.55),
+  });
+  const iconColor = resolveLayeredColor({
+    instance: iconColorProp,
+    theme: colors.bg,
+    fallback: colors.bg,
+  });
+  const iconBackgroundColor = resolveLayeredColor({
+    instance: iconBackgroundColorProp,
+    theme: colors.fg,
+    fallback: colors.fg,
+  });
+  const trendUpColor = resolveLayeredColor({
+    instance: trendUpColorProp,
+    component: TREND_COLOR_POSITIVE,
+    fallback: TREND_COLOR_POSITIVE,
+  });
+  const trendDownColor = resolveLayeredColor({
+    instance: trendDownColorProp,
+    component: TREND_COLOR_NEGATIVE,
+    fallback: TREND_COLOR_NEGATIVE,
+  });
+
+  // Formatting value (always useGrouping internally as per spec)
+  const displayValue = formatValue(value, precision, true);
+
+  // Alignment configuration
+  let alignItems = 'flex-start';
+  let textAlign = 'left';
+  if (align === 'center') {
+    alignItems = 'center';
+    textAlign = 'center';
+  } else if (align === 'right') {
+    alignItems = 'flex-end';
+    textAlign = 'right';
+  }
+
+  let iconHtml = '';
+  let iconComponent: LucideIcons.LucideIcon | null = null;
+  let iconGlyphSize = 0;
+  if (icon) {
+    const badgeSize = Math.max(iconSize, MIN_ICON_BADGE_SIZE);
+    iconGlyphSize = Math.max(MIN_ICON_GLYPH_SIZE, Math.round(badgeSize * 0.58));
+    iconComponent = resolveIconComponent(icon);
+
+    if (iconComponent) {
+      iconHtml = renderIconBadgeFrame(
+        `<div data-value-card-icon-slot="true" style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:${iconColor};"></div>`,
+        badgeSize,
+      ).replace('color: currentColor;', `color: ${iconColor};`).replace('background: currentColor;', `background: ${iconBackgroundColor};`);
+    } else {
+      const iconLabel = iconLabelFromValue(icon);
+      if (iconLabel) {
+        const fontSize = Math.max(MIN_ICON_FONT_SIZE, Math.round(badgeSize * 0.42));
+        iconHtml = renderIconBadgeFrame(
+          `<span style="font-size:${fontSize}px;font-weight:700;letter-spacing:0.04em;color:${iconColor};">${escapeHtml(iconLabel)}</span>`,
+          badgeSize,
+        ).replace('color: currentColor;', `color: ${iconColor};`).replace('background: currentColor;', `background: ${iconBackgroundColor};`);
+      }
+    }
+  }
+
+  element.style.cssText = `
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: inherit;
+    font-family: Inter, Noto Sans SC, Noto Sans, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  `;
+
+  // Trend badge HTML
+  const trendHtml = renderTrendBadge(trend, subtitleFontSize, trendUpColor, trendDownColor);
+  const hasSideIcon = !!iconHtml && (iconPosition === 'left' || iconPosition === 'right');
+  const titleHtml = `
+    <div style="
+      font-size: ${titleSize}px;
+      color: ${titleColor};
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    ">
+      ${escapeHtml(title)}
+    </div>
+  `;
+  const valueHtml = `
+    <div style="
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      line-height: 1.2;
+      font-feature-settings: 'tnum';
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+      justify-content: ${align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start'};
+    ">
+      ${prefix ? `
+        <span style="font-size: ${unitSize}px; color: ${valueColor}; opacity: 0.8;">
+          ${escapeHtml(prefix)}
+        </span>
+      ` : ''}
+      <span style="font-size: ${mainValueSize}px; font-weight: 600; color: ${valueColor};">
+        ${escapeHtml(displayValue)}
+      </span>
+      ${suffix ? `
+        <span style="font-size: ${unitSize}px; color: ${valueColor}; opacity: 0.8;">
+          ${escapeHtml(suffix)}
+        </span>
+      ` : ''}
+    </div>
+  `;
+  const subtitleHtml = subtitle ? `
+    <div style="
+      font-size: ${subTitleSize}px;
+      color: ${subtitleColor};
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    ">
+      ${escapeHtml(subtitle)}
+    </div>
+  ` : '';
+  const textContentHtml = `
+    <div style="
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: ${contentGap}px;
+      align-items: ${alignItems};
+      text-align: ${textAlign};
+      width: 100%;
+    ">
+      ${hasSideIcon && trendHtml ? `
+        <div style="display:flex;justify-content:${align === 'right' ? 'flex-end' : 'flex-start'};width:100%;">
+          ${trendHtml}
+        </div>
+      ` : ''}
+      ${titleHtml}
+      ${valueHtml}
+      ${subtitleHtml}
+    </div>
+  `;
+
+  // Row 1 visibility: only render when icon or trend exists
+  const hasRow1 = !hasSideIcon && (iconHtml || trendHtml);
+
+  // HTML Structure — 4-row layout per spec v2
+  element.innerHTML = `
+    <div style="
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: ${contentGap}px;
+      align-items: ${alignItems};
+      text-align: ${textAlign};
+      padding: ${paddingY}px ${paddingX}px;
+      color: ${valueColor};
+      background: transparent;
+    ">
+      ${hasSideIcon ? `
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: ${align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start'};
+          gap: 14px;
+          width: 100%;
+          min-width: 0;
+        ">
+          ${iconPosition === 'left' ? iconHtml : ''}
+          ${textContentHtml}
+          ${iconPosition === 'right' ? iconHtml : ''}
+        </div>
+      ` : ''}
+
+      ${!hasSideIcon ? `
+      ${hasRow1 ? `
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
+        ">
+          ${iconHtml}
+          ${trendHtml}
+        </div>
+      ` : ''}
+
+      ${titleHtml}
+      ${valueHtml}
+      ${subtitleHtml}
+      ` : ''}
+    </div>
+  `;
+
+  if (iconComponent) {
+    const iconSlot = element.querySelector(ICON_SLOT_SELECTOR);
+    if (iconSlot instanceof HTMLElement) {
+      const iconRoot = createRoot(iconSlot);
+      iconRoot.render(createElement(iconComponent, {
+        size: iconGlyphSize,
+        color: iconColor,
+        strokeWidth: DEFAULT_ICON_STROKE_WIDTH,
+      }));
+      return iconRoot;
+    }
+  }
+
+  return null;
+}
+
+// ============================================================================
+// Widget Export
+// ============================================================================
+export const Main = defineWidget({
+  id: metadata.id,
+  name: metadata.name,
+  category: metadata.category,
+  icon: metadata.icon,
+  version: metadata.version,
+  defaultSize: metadata.defaultSize,
+  constraints: metadata.constraints,
+  resizable: metadata.resizable,
+  locales: { zh, en },
+  schema: PropsSchema,
+  controls,
+  
+  render: (element: HTMLElement, props: Props, ctx: WidgetOverlayContext) => {
+    let currentProps = props;
+    let currentCtx = ctx;
+    let colors = resolveWidgetColors(element);
+    let iconRoot: Root | null = null;
+    let themeObserver: MutationObserver | null = null;
+
+    const renderWidget = () => {
+      iconRoot?.unmount();
+      iconRoot = renderCard(element, currentProps, colors, currentCtx);
+    };
+    
+    renderWidget();
+    
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        colors = resolveWidgetColors(element);
+        renderWidget();
+      });
+      ro.observe(element);
+    }
+
+    const themeTarget = element.closest('[data-canvas-theme]');
+    if (themeTarget && typeof MutationObserver !== 'undefined') {
+      themeObserver = new MutationObserver(() => {
+        colors = resolveWidgetColors(element);
+        renderWidget();
+      });
+      themeObserver.observe(themeTarget, { attributes: true, attributeFilter: ['data-canvas-theme'] });
+    }
+    
+    return {
+      update: (newProps: Props, newCtx: WidgetOverlayContext) => {
+        currentProps = newProps;
+        currentCtx = newCtx;
+        colors = resolveWidgetColors(element);
+        renderWidget();
+      },
+      destroy: () => {
+        iconRoot?.unmount();
+        ro?.disconnect();
+        themeObserver?.disconnect();
+        element.innerHTML = '';
+      }
+    };
+  }
+});
+
+export default Main;

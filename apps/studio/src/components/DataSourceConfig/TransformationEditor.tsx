@@ -1,0 +1,126 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Label } from '@/components/ui/label';
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { oneDark } from '@codemirror/theme-one-dark';
+
+interface TransformationEditorProps {
+  code: string;
+  onChange: (code: string) => void;
+  /** Triggered before running preview, typically to request fresh source data. */
+  onBeforePreviewRun?: () => void;
+  /** Sample data to run the script against for live preview. */
+  previewData?: unknown;
+}
+
+const EXTENSIONS = [javascript()];
+
+/** Run script in a Function sandbox with `data` bound, returning result or error. */
+function runPreview(code: string, data: unknown): { ok: boolean; value: string } {
+  if (!code.trim()) return { ok: true, value: '// (empty)' };
+  if (data === undefined || data === null) {
+    return { ok: true, value: '// waiting for live data...' };
+  }
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function('data', `"use strict";\n${code}`);
+    const result = fn(data);
+    return {
+      ok: true,
+      value:
+        result === undefined
+          ? 'undefined'
+          : typeof result === 'string'
+            ? result
+            : JSON.stringify(result, null, 2),
+    };
+  } catch (e) {
+    return { ok: false, value: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+const DEFAULT_PREVIEW_DATA = { items: [{ value: 42 }, { value: 18 }] };
+
+export const TransformationEditor: React.FC<TransformationEditorProps> = ({
+  code,
+  onChange,
+  onBeforePreviewRun,
+  previewData = DEFAULT_PREVIEW_DATA,
+}) => {
+  const { t } = useTranslation('editor');
+  const [preview, setPreview] = useState<{ ok: boolean; value: string } | null>(null);
+
+  useEffect(() => {
+    setPreview(runPreview(code, previewData));
+  }, [code, previewData]);
+
+  const handleChange = useCallback(
+    (value: string) => {
+      onChange(value);
+      onBeforePreviewRun?.();
+      setPreview(runPreview(value, previewData));
+    },
+    [onBeforePreviewRun, onChange, previewData],
+  );
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm uppercase font-bold text-[#6965db]">
+        {t('datasource.transformation')}
+      </Label>
+
+      <div className="relative group">
+        <CodeMirror
+          value={code}
+          height="280px"
+          extensions={EXTENSIONS}
+          theme={oneDark}
+          onChange={handleChange}
+          placeholder="return data.items.map(i => i.value);"
+          basicSetup={{
+            lineNumbers: true,
+            autocompletion: true,
+            foldGutter: false,
+          }}
+          className="text-sm rounded-lg overflow-hidden border border-input focus-within:border-[#6965db] transition-colors"
+        />
+        <div className="absolute right-2 bottom-2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+          JS Sandbox
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1 pt-1">
+        <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
+          {t('datasource.transformationPreviewOutput')}
+        </span>
+        <div
+          className={[
+            'rounded-lg border p-3 text-xs font-mono overflow-auto bg-muted/20',
+            'min-h-[180px] max-h-[260px]',
+            preview === null
+              ? 'border-input text-muted-foreground'
+              : preview.ok
+                ? 'border-input text-foreground'
+                : 'border-red-500/40 text-red-400',
+          ].join(' ')}
+        >
+          {preview === null ? (
+            <span className="opacity-50">{t('datasource.transformationPreviewWaiting')}</span>
+          ) : (
+            <pre className="whitespace-pre-wrap break-words">{preview.value}</pre>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t('datasource.transformationTestData')}{' '}
+          <code className="text-[11px] bg-muted px-1 rounded">
+            {JSON.stringify(previewData).slice(0, 120)}
+            {JSON.stringify(previewData).length > 120 ? '…' : ''}
+          </code>
+        </p>
+      </div>
+
+      <p className="text-xs text-muted-foreground">{t('datasource.transformationHint')}</p>
+    </div>
+  );
+};

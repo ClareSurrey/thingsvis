@@ -1,0 +1,298 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { WidgetMainModule } from '@thingsvis/widget-sdk';
+import { mountWidget } from './widgetLifecycle';
+
+const echartsSetOption = vi.fn();
+const echartsResize = vi.fn();
+const echartsDispose = vi.fn();
+const echartsIsDisposed = vi.fn(() => false);
+
+vi.mock('echarts', () => ({
+  init: vi.fn(() => ({
+    setOption: echartsSetOption,
+    resize: echartsResize,
+    dispose: echartsDispose,
+    isDisposed: echartsIsDisposed,
+  })),
+  graphic: {
+    LinearGradient: class LinearGradient {
+      constructor(...args: unknown[]) {
+        Object.assign(this, { args });
+      }
+    },
+  },
+}));
+
+const uPlotSetSize = vi.fn();
+const uPlotDestroy = vi.fn();
+
+class UPlotMock {
+  static paths = {
+    spline: () => undefined,
+  };
+
+  root: HTMLDivElement;
+
+  constructor(_opts: unknown, _data: unknown, target: HTMLElement) {
+    this.root = document.createElement('div');
+    this.root.className = 'uplot';
+    target.appendChild(this.root);
+  }
+
+  setSize(size: unknown) {
+    uPlotSetSize(size);
+  }
+
+  destroy() {
+    uPlotDestroy();
+    this.root.remove();
+  }
+}
+
+vi.mock('uplot', () => ({
+  default: UPlotMock,
+}));
+
+vi.mock('uplot/dist/uPlot.min.css', () => ({}));
+
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+class MutationObserverMock {
+  observe() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+
+class IntersectionObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+class WebSocketMock {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+
+  readyState = WebSocketMock.CLOSED;
+
+  addEventListener() {}
+  removeEventListener() {}
+  send() {}
+  close() {}
+}
+
+class RTCPeerConnectionMock {
+  addEventListener() {}
+  removeEventListener() {}
+  addTransceiver() {}
+  addTrack() {}
+  close() {}
+  createOffer = async () => ({ type: 'offer', sdp: '' });
+  createAnswer = async () => ({ type: 'answer', sdp: '' });
+  setLocalDescription = async () => {};
+  setRemoteDescription = async () => {};
+  addIceCandidate = async () => {};
+  getReceivers() {
+    return [];
+  }
+  getSenders() {
+    return [];
+  }
+  getTransceivers() {
+    return [];
+  }
+}
+
+vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+vi.stubGlobal('MutationObserver', MutationObserverMock);
+vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
+vi.stubGlobal('WebSocket', WebSocketMock);
+vi.stubGlobal('RTCPeerConnection', RTCPeerConnectionMock);
+vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+  return window.setTimeout(() => cb(0), 0);
+});
+vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+  window.clearTimeout(id);
+});
+vi.stubGlobal('confirm', vi.fn(() => true));
+vi.stubGlobal('matchMedia', (query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addEventListener() {},
+  removeEventListener() {},
+  addListener() {},
+  removeListener() {},
+  dispatchEvent() {
+    return false;
+  },
+}));
+
+if (typeof HTMLMediaElement !== 'undefined') {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {
+    configurable: true,
+    get() {
+      return 2;
+    },
+  });
+}
+
+const widgetModuleLoaders = import.meta.glob<{ default?: WidgetMainModule; Main?: WidgetMainModule }>(
+  '../*/*/src/index.{ts,tsx}',
+);
+
+const widgetModulePaths = Object.keys(widgetModuleLoaders)
+  .filter((modulePath) => !modulePath.includes('../custom/bridge-3d/'))
+  .sort();
+const expectedWidgetModulePaths = [
+  '../basic/analog-clock/src/index.ts',
+  '../basic/badge/src/index.ts',
+  '../basic/card/src/index.ts',
+  '../basic/circle/src/index.ts',
+  '../basic/container/src/index.ts',
+  '../basic/digital-clock/src/index.ts',
+  '../basic/glass-panel/src/index.ts',
+  '../basic/icon/src/index.ts',
+  '../basic/line/src/index.ts',
+  '../basic/list/src/index.ts',
+  '../basic/luxury-clock/src/index.ts',
+  '../basic/placeholder/src/index.ts',
+  '../basic/rectangle/src/index.ts',
+  '../basic/rich-text/src/index.ts',
+  '../basic/table/src/index.ts',
+  '../basic/text/src/index.ts',
+  '../chart/echarts-bar/src/index.ts',
+  '../chart/echarts-gauge/src/index.ts',
+  '../chart/echarts-line/src/index.ts',
+  '../chart/echarts-pie/src/index.ts',
+  '../chart/uplot-line/src/index.ts',
+  '../custom/alert-list/src/index.ts',
+  '../custom/device-status-card/src/index.ts',
+  '../custom/guidance-steps/src/index.ts',
+  '../decoration/border-corner/src/index.ts',
+  '../decoration/border-scanline/src/index.ts',
+  '../decoration/section-divider/src/index.ts',
+  '../decoration/tech-border/src/index.ts',
+  '../decoration/title-decoration/src/index.ts',
+  '../geo/map/src/index.ts',
+  '../geo/map-china/src/index.ts',
+  '../industrial/flow-meter/src/index.ts',
+  '../industrial/motor/src/index.ts',
+  '../industrial/pipe/src/index.ts',
+  '../industrial/pressure-gauge/src/index.ts',
+  '../industrial/pump/src/index.ts',
+  '../industrial/svg-symbol/src/index.ts',
+  '../industrial/tank/src/index.ts',
+  '../industrial/valve/src/index.ts',
+  '../interaction/basic-button/src/index.ts',
+  '../interaction/basic-input/src/index.ts',
+  '../interaction/basic-progress/src/index.ts',
+  '../interaction/basic-select/src/index.ts',
+  '../interaction/basic-slider/src/index.ts',
+  '../interaction/basic-switch/src/index.ts',
+  '../interaction/toggle-button/src/index.ts',
+  '../interaction/value-card/src/index.ts',
+  '../interaction/value-card-simple/src/index.ts',
+  '../interaction/date-range-picker/src/index.ts',
+  '../media/iframe/src/index.ts',
+  '../media/image/src/index.ts',
+  '../media/video-player/src/index.ts',
+  '../resources/model-3d/src/index.ts',
+].sort();
+const runtimeContractModulePaths = widgetModulePaths.filter(
+  (modulePath) =>
+    !modulePath.includes('../chart/') &&
+    !modulePath.includes('../media/video-player/') &&
+    !modulePath.includes('../resources/model-3d/'),
+);
+const dataPreviewModulePaths = [
+  '../basic/table/src/index.ts',
+  '../chart/echarts-bar/src/index.ts',
+  '../chart/echarts-gauge/src/index.ts',
+  '../chart/echarts-line/src/index.ts',
+  '../chart/echarts-pie/src/index.ts',
+  '../chart/uplot-line/src/index.ts',
+];
+
+describe('widget runtime contracts', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    document.head.querySelector('#__tv-switch-spinner-css')?.remove();
+    echartsSetOption.mockClear();
+    echartsResize.mockClear();
+    echartsDispose.mockClear();
+    echartsIsDisposed.mockClear();
+    uPlotSetSize.mockClear();
+    uPlotDestroy.mockClear();
+  });
+
+  it('discovers every widget package', () => {
+    expect(widgetModulePaths).toEqual(expectedWidgetModulePaths);
+  });
+
+  it('keeps chart, video-player, and WebGL widgets on dedicated runtime tests', () => {
+    expect(widgetModulePaths.filter((modulePath) => !runtimeContractModulePaths.includes(modulePath))).toEqual([
+      '../chart/echarts-bar/src/index.ts',
+      '../chart/echarts-gauge/src/index.ts',
+      '../chart/echarts-line/src/index.ts',
+      '../chart/echarts-pie/src/index.ts',
+      '../chart/uplot-line/src/index.ts',
+      '../media/video-player/src/index.ts',
+      '../resources/model-3d/src/index.ts',
+    ]);
+  });
+
+  it('declares ThingsVis-owned sample data for data preview widgets', async () => {
+    for (const modulePath of dataPreviewModulePaths) {
+      const moduleExports = await widgetModuleLoaders[modulePath]!();
+      const widget = moduleExports.default ?? moduleExports.Main;
+
+      expect(widget?.sampleData, `${modulePath} missing sampleData`).toMatchObject({
+        data: expect.anything(),
+      });
+      expect(widget?.previewDefaults, `${modulePath} missing previewDefaults`).toMatchObject({
+        data: expect.anything(),
+      });
+    }
+  });
+
+  for (const modulePath of runtimeContractModulePaths) {
+    it(`${modulePath} mounts, updates, and destroys cleanly`, async () => {
+      const moduleExports = await widgetModuleLoaders[modulePath]!();
+      const widget = moduleExports.default ?? moduleExports.Main;
+
+      expect(widget, `${modulePath} missing widget export`).toBeDefined();
+      if (!widget) {
+        throw new Error(`${modulePath} missing widget export`);
+      }
+
+      expect(widget.schema, `${modulePath} missing schema`).toBeDefined();
+      expect(widget.controls, `${modulePath} missing controls`).toBeDefined();
+      expect(widget.locales, `${modulePath} missing locales`).toMatchObject({
+        en: expect.anything(),
+        zh: expect.anything(),
+      });
+
+      const harness = mountWidget(widget, { locale: 'en' });
+      expect(harness.element).toBeInstanceOf(HTMLElement);
+
+      harness.update({
+        locale: 'zh',
+        props: widget.standaloneDefaults ?? {},
+      });
+
+      harness.destroy();
+      expect(document.body.children).toHaveLength(0);
+    });
+  }
+});

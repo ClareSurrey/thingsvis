@@ -1,0 +1,26 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-interaction-date-range-picker": {
+                "name": "Date Range Picker",
+                "groupContent": "Content",
+                "groupStyle": "Style",
+                "label": "Label",
+                "showPresets": "Show Presets",
+                "fontSize": "Font Size",
+                "startTime": "Start Time",
+                "endTime": "End Time"
+            }
+        }
+    },
+    "runtime": {
+        "presets": {
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "thisWeek": "This Week",
+            "thisMonth": "This Month",
+            "last7Days": "Last 7 Days",
+            "last30Days": "Last 30 Days"
+        }
+    }
+}

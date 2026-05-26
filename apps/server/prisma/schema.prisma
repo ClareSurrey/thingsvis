@@ -1,0 +1,160 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x", "linux-musl", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id             String          @id @default(cuid())
+  name           String
+  slug           String          @unique
+  plan           String          @default("FREE")
+  settings       String          @default("{}")
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  projects       Project[]
+  thirdPartyApps ThirdPartyApp[]
+  users          User[]
+
+  @@map("tenants")
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String?
+  passwordHash String?
+  avatar       String?
+  role         String       @default("VIEWER")
+  ssoProvider  String?
+  ssoSubject   String?
+  tenantId     String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  lastLoginAt  DateTime?
+  authType     String       @default("LOCAL")
+  displayEmail String?
+  dashboards   Dashboard[]
+  dataSources  DataSource[]
+  projects     Project[]
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([ssoProvider, ssoSubject])
+  @@map("users")
+}
+
+model Project {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  thumbnail   String?
+  tenantId    String
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  dashboards  Dashboard[]
+  createdBy   User        @relation(fields: [createdById], references: [id])
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("projects")
+}
+
+model Dashboard {
+  id           String             @id @default(cuid())
+  name         String
+  thumbnail    String?
+  version      Int                @default(1)
+  canvasConfig String             @default("{}")
+  nodes        String             @default("[]")
+  dataSources  String             @default("[]")
+  isPublished  Boolean            @default(false)
+  publishedAt  DateTime?
+  shareToken   String?            @unique
+  homeFlag     Boolean            @default(false)
+  projectId    String
+  createdById  String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  variables    String             @default("[]")
+  shareEnabled Boolean            @default(false)
+  shareExpiry  DateTime?
+  shareConfig  String?
+  versions     DashboardVersion[]
+  createdBy    User               @relation(fields: [createdById], references: [id])
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([shareToken])
+  @@map("dashboards")
+}
+
+model DashboardVersion {
+  id           String    @id @default(cuid())
+  version      Int
+  canvasConfig String
+  nodes        String
+  dataSources  String
+  dashboardId  String
+  createdAt    DateTime  @default(now())
+  variables    String    @default("[]")
+  dashboard    Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardId, version])
+  @@map("dashboard_versions")
+}
+
+model DataSource {
+  id             String   @id
+  name           String
+  type           String
+  config         String
+  transformation String?
+  isDeleted      Boolean  @default(false)
+  userId         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isDeleted])
+  @@map("data_sources")
+}
+
+model ThirdPartyApp {
+  id             String   @id @default(cuid())
+  name           String
+  appId          String   @unique
+  appSecretHash  String
+  permissions    String   @default("[]")
+  allowedOrigins String   @default("[]")
+  isActive       Boolean  @default(true)
+  tenantId       String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  apiKeys        ApiKey[]
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("third_party_apps")
+}
+
+model ApiKey {
+  id         String        @id @default(cuid())
+  prefix     String
+  keyHash    String        @unique
+  label      String?
+  expiresAt  DateTime?
+  lastUsedAt DateTime?
+  isRevoked  Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  appId      String
+  app        ThirdPartyApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@map("api_keys")
+}

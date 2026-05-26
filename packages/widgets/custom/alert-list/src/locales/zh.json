@@ -1,0 +1,21 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-custom-alert-list": {
+        "name": "告警列表",
+        "groupContent": "内容",
+        "groupStyle": "样式",
+        "items": "告警数据",
+        "maxItems": "最多条数",
+        "autoScroll": "自动循环滚动",
+        "scrollSpeed": "滚动速度",
+        "showTime": "显示时间",
+        "showSource": "显示来源",
+        "showDetail": "显示详情",
+        "titleFontSize": "标题字号",
+        "detailFontSize": "详情字号",
+        "timeFontSize": "时间字号"
+      }
+    }
+  }
+}

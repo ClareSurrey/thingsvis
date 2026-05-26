@@ -1,0 +1,45 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-basic-list": {
+        "name": "List",
+        "groupContent": "Content",
+        "groupRegions": "Columns",
+        "groupTypography": "Typography",
+        "groupColor": "Colors",
+        "showTitle": "Show title",
+        "title": "Title",
+        "itemsJson": "Items (JSON array)",
+        "listMode": "List type",
+        "listUnordered": "Bulleted",
+        "listOrdered": "Numbered",
+        "unorderedMarker": "Bullet marker",
+        "markerDisc": "Bullet",
+        "markerCircle": "Solid circle",
+        "markerSquare": "Square",
+        "markerDash": "Dash",
+        "markerCheck": "Checkmark",
+        "markerCustom": "Custom",
+        "customBullet": "Custom symbol",
+        "numberStyle": "Number format",
+        "numberDot": "1. …",
+        "numberParenClose": "1) …",
+        "numberParenAround": "(1) …",
+        "numberPlain": "Digits only",
+        "orderStart": "Starting number",
+        "showLeading": "Show leading marker or icon column",
+        "showLeftText": "Show left column",
+        "showRightText": "Show right column",
+        "titleFontSize": "Title font size",
+        "leftFontSize": "Left font size",
+        "rightFontSize": "Right font size",
+        "leadingFontSize": "Leading font size",
+        "rowGap": "Row gap",
+        "titleColor": "Title color",
+        "leftColor": "Left text color",
+        "rightColor": "Right text color",
+        "leadingColor": "Leading / marker color"
+      }
+    }
+  }
+}

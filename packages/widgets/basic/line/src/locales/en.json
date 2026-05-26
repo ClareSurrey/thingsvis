@@ -1,0 +1,32 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-basic-line": {
+                "name": "Connector"
+            }
+        },
+        "controls": {
+            "basic-line": {
+                "routerType": "Route Type",
+                "straight": "Straight",
+                "orthogonal": "Orthogonal",
+                "curved": "Curved",
+                "stroke": "Color",
+                "strokeWidth": "Thickness",
+                "strokeStyle": "Line Style",
+                "solid": "Solid",
+                "dashed": "Dashed",
+                "dotted": "Dotted",
+                "opacity": "Opacity",
+                "arrowStart": "Start Arrow",
+                "arrowEnd": "End Arrow",
+                "none": "None",
+                "arrow": "Arrow",
+                "open-arrow": "Open Arrow",
+                "arrowSize": "Arrow Size",
+                "sourceNodeId": "Source Node",
+                "targetNodeId": "Target Node"
+            }
+        }
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-interaction-date-range-picker": {
+                "name": "日期范围选择器",
+                "groupContent": "内容",
+                "groupStyle": "样式",
+                "label": "标签",
+                "showPresets": "显示快捷按钮",
+                "fontSize": "字体大小",
+                "startTime": "开始时间",
+                "endTime": "结束时间"
+            }
+        }
+    },
+    "runtime": {
+        "presets": {
+            "today": "今天",
+            "yesterday": "昨天",
+            "thisWeek": "本周",
+            "thisMonth": "本月",
+            "last7Days": "最近7天",
+            "last30Days": "最近30天"
+        }
+    }
+}

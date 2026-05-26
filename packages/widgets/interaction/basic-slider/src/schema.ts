@@ -1,0 +1,20 @@
+import { z } from 'zod';
+
+export const PropsSchema = z.object({
+  label: z.string().default('滑块').describe('props.label'),
+  value: z.number().default(50).describe('props.value'),
+  min: z.number().default(0).describe('props.min'),
+  max: z.number().default(100).describe('props.max'),
+  step: z.number().min(0.01).default(1).describe('props.step'),
+  unit: z.string().default('').describe('props.unit'),
+  showValue: z.boolean().default(true).describe('props.showValue'),
+  trackColor: z.string().default('').describe('props.trackColor'),
+  textColor: z.string().default('').describe('props.textColor'),
+  disabled: z.boolean().default(false).describe('props.disabled'),
+});
+
+export type Props = z.infer<typeof PropsSchema>;
+
+export function getDefaultProps(): Props {
+  return PropsSchema.parse({});
+}

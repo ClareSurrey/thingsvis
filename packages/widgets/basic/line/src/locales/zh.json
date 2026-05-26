@@ -1,0 +1,32 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-basic-line": {
+                "name": "连接线"
+            }
+        },
+        "controls": {
+            "basic-line": {
+                "routerType": "路径类型",
+                "straight": "直线",
+                "orthogonal": "折线",
+                "curved": "曲线",
+                "stroke": "颜色",
+                "strokeWidth": "粗细",
+                "strokeStyle": "线型",
+                "solid": "实线",
+                "dashed": "虚线",
+                "dotted": "点线",
+                "opacity": "透明度",
+                "arrowStart": "起点箭头",
+                "arrowEnd": "终点箭头",
+                "none": "无",
+                "arrow": "箭头",
+                "open-arrow": "开放箭头",
+                "arrowSize": "箭头大小",
+                "sourceNodeId": "起点节点",
+                "targetNodeId": "终点节点"
+            }
+        }
+    }
+}

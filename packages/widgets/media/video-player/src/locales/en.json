@@ -1,0 +1,24 @@
+{
+    "editor": {
+        "widgets": {
+            "thingsvis-widget-media-video-player": {
+                "name": "Video Player",
+                "groupContent": "Content",
+                "groupStyle": "Style",
+                "src": "Video Stream URL",
+                "mode": "Play Mode",
+                "background": "Run in Background",
+                "visibilityThreshold": "Visibility Threshold",
+                "objectFit": "Object Fit",
+                "borderWidth": "Border Width",
+                "borderColor": "Border Color",
+                "borderRadius": "Border Radius"
+            }
+        }
+    },
+    "runtime": {
+        "empty": "Configure a video source",
+        "loading": "Loading video",
+        "error": "Failed to load video"
+    }
+}

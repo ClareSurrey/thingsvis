@@ -1,0 +1,27 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-industrial-svg-symbol": {
+        "name": "Graphic Symbol"
+      }
+    },
+    "controls": {
+      "industrial-svg-symbol": {
+        "group": "SVG Configuration",
+        "displayBasic": "Basic Display",
+        "advanced": "Advanced",
+        "selectedIconId": "Industrial Symbol",
+        "stateMode": "Device State",
+        "stateModeNone": "(None)",
+        "stateModeNormal": "Normal",
+        "stateModeRunning": "Running",
+        "stateModeWarning": "Warning",
+        "stateModeFault": "Fault",
+        "stateModeOffline": "Offline",
+        "animateEnabled": "Enable Animation",
+        "svgContent": "Custom SVG Source",
+        "svgContentDescription": "Used when no symbol is selected above"
+      }
+    }
+  }
+}

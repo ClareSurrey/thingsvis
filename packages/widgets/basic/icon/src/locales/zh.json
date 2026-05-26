@@ -1,0 +1,38 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-basic-icon": {
+        "name": "图标",
+        "groupContent": "内容",
+        "groupStyle": "样式",
+        "localIconId": "本地图标",
+        "iconSource": "图标来源",
+        "iconSourceLocal": "本地图库",
+        "iconSourceBuiltin": "Lucide 图标",
+        "iconName": "图标",
+        "iconSquare": "方形",
+        "iconCircle": "圆形",
+        "iconTriangle": "三角形",
+        "iconBolt": "闪电",
+        "iconStar": "星形",
+        "iconHeart": "爱心",
+        "iconPin": "定位",
+        "iconBell": "铃铛",
+        "iconShieldCheck": "安全盾牌",
+        "iconActivity": "活动",
+        "iconThermometer": "温度",
+        "iconDroplet": "水滴",
+        "iconGauge": "仪表",
+        "iconZap": "闪电",
+        "iconAlertTriangle": "警告",
+        "iconCheckCircle": "正常",
+        "iconXCircle": "错误",
+        "iconTrendingUp": "趋势上升",
+        "iconTrendingDown": "趋势下降",
+        "iconClock": "时钟",
+        "iconCpu": "CPU",
+        "color": "图标颜色"
+      }
+    }
+  }
+}

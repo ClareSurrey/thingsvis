@@ -1,0 +1,259 @@
+/**
+ * WidgetModeStrategy  Host-managed Mode
+ *
+ * Responsibilities:
+ * 1. bootstrap: Awaits the 	v:init message from the Host.
+ * 2. save: Sends 	v:save to the Host via postMessage.
+ * 3. listeners: Handles real-time pushes (e.g., config updates, schema changes).
+ *
+ * @important Do not import any Cloud API or storage adapter modules.
+ */
+
+import type { EditorStrategy, UIVisibilityConfig } from './EditorStrategy';
+import type { ProjectFile } from '../lib/storage/schemas';
+import { messageRouter, MSG_TYPES } from '../embed/message-router';
+import { usePlatformFieldStore, type PlatformFieldItem } from '../lib/stores/platformFieldStore';
+import { usePlatformDeviceStore } from '../lib/stores/platformDeviceStore';
+import { dataSourceManager } from '../lib/store';
+import { DEFAULT_PLATFORM_FIELD_CONFIG } from '@thingsvis/schema';
+import { augmentPlatformDataSourcesForNodes } from '../lib/platformDatasourceBindings';
+import { normalizeCanvasBackground } from '../lib/canvasBackground';
+import { stripStaticPropsForBoundProject } from '../lib/storage/sanitizeBoundProps';
+// =============================================================================
+// Interfaces & Types
+// =============================================================================
+
+import { type PlatformDevice } from '../lib/stores/platformDeviceStore';
+
+export interface EmbedInitPayload {
+  projectId?: string;
+  projectName?: string;
+  thumbnail?: string;
+  canvas?: {
+    mode?: string;
+    width?: number;
+    height?: number;
+    background?: string | Record<string, unknown>;
+    gridCols?: number;
+    gridRowHeight?: number;
+    gridGap?: number;
+    fullWidthPreview?: boolean;
+    layerOrder?: unknown[];
+    layerGroups?: Record<string, unknown>;
+  };
+  nodes?: Record<string, unknown>[];
+  dataSources?: Record<string, unknown>[];
+  variables?: Record<string, unknown>[];
+  platformFields?: PlatformFieldItem[];
+  platformDevices?: PlatformDevice[];
+  [key: string]: unknown;
+}
+
+// =============================================================================
+// Strategy Implementation
+// =============================================================================
+
+export class WidgetModeStrategy implements EditorStrategy {
+  readonly mode = 'widget' as const;
+
+  private initResolve: ((data: ProjectFile | null) => void) | null = null;
+  private initTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Bootstrap: Wait for the Host to send initialization data.
+   * Returns a Promise that resolves when the init message is received.
+   * If the Host fails to send within the timeout, resolves to null to create an empty project.
+   */
+  async bootstrap(_projectId: string): Promise<ProjectFile | null> {
+    return new Promise<ProjectFile | null>((resolve) => {
+      this.initResolve = resolve;
+
+      // Handle the 'init' event from the host
+      messageRouter.on(MSG_TYPES.INIT, this.handleInitEvent);
+
+      // 30-second timeout for initialization
+      this.initTimeout = setTimeout(() => {
+        if (this.initResolve) {
+          console.warn('[WidgetModeStrategy] Init timeout, creating empty project');
+          this.finishInit(null);
+        }
+      }, 30000);
+    });
+  }
+
+  private handleInitEvent = (rawPayload: unknown) => {
+    // The message-router now unpacks payload?.data automatically or passes payload raw.
+    // We handle nested data structures just in case legacy implementations passed it via { data: { ... } }
+    const parsedPayload = (rawPayload as { data?: unknown }).data || rawPayload;
+    const payload = parsedPayload as EmbedInitPayload;
+
+    if (!payload || typeof payload !== 'object') {
+      console.warn('[WidgetModeStrategy] Invalid init payload received');
+      this.finishInit(null);
+      return;
+    }
+
+    // 1. Register per-device Data Sources if platformDevices are provided.
+    if (Array.isArray(payload.platformDevices)) {
+      payload.platformDevices.forEach((device) => {
+        if (!device.deviceId) return;
+        dataSourceManager.registerDataSource({
+          id: `__platform_${device.deviceId}__`,
+          name: device.deviceName || `Device ${device.deviceId}`,
+          type: 'PLATFORM_FIELD',
+          config: {
+            ...DEFAULT_PLATFORM_FIELD_CONFIG,
+            source: 'plugin-identifier',
+            deviceId: device.deviceId,
+          },
+        });
+      });
+      // Store devices in kernel state (to be used by LeftPanel DeviceLibrary)
+      usePlatformDeviceStore.getState().setDevices(payload.platformDevices);
+    }
+
+    // 2. Process Platform Fields provided by Host
+    if (Array.isArray(payload.platformFields)) {
+      usePlatformFieldStore.getState().setFields(payload.platformFields);
+    }
+
+    const hydratedDataSources = augmentPlatformDataSourcesForNodes(
+      dataSourceManager.getAllConfigs(),
+      (payload.nodes as Record<string, unknown>[] | undefined) ?? [],
+    );
+    hydratedDataSources.forEach((dataSource) => {
+      dataSourceManager.registerDataSource(dataSource, false).catch((error) => {
+        console.error('[WidgetModeStrategy] Failed to hydrate platform data source:', error);
+      });
+    });
+
+    // 3. Construct the internal ProjectFile state
+    const projectFile: ProjectFile = {
+      meta: {
+        version: '1.0.0',
+        id: payload.projectId || 'new-project',
+        name: payload.projectName || 'Untitled',
+        thumbnail: payload.thumbnail,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      },
+      canvas: {
+        mode: (payload.canvas?.mode || 'fixed') as 'fixed' | 'infinite' | 'grid',
+        width: payload.canvas?.width || 1920,
+        height: payload.canvas?.height || 1080,
+        background: normalizeCanvasBackground(payload.canvas?.background),
+        gridCols: payload.canvas?.gridCols,
+        gridRowHeight: payload.canvas?.gridRowHeight,
+        gridGap: payload.canvas?.gridGap,
+        fullWidthPreview: payload.canvas?.fullWidthPreview,
+        layerOrder: Array.isArray(payload.canvas?.layerOrder)
+          ? payload.canvas.layerOrder.filter((id): id is string => typeof id === 'string')
+          : undefined,
+        layerGroups: payload.canvas?.layerGroups as ProjectFile['canvas']['layerGroups'],
+      },
+      nodes: payload.nodes || [],
+      dataSources: (payload.dataSources || []) as {
+        type: string;
+        id: string;
+        config: Record<string, unknown>;
+      }[],
+      variables: Array.isArray(payload.variables) ? payload.variables : [],
+    };
+
+    this.finishInit(projectFile);
+  };
+
+  private finishInit(data: ProjectFile | null) {
+    if (this.initTimeout) {
+      clearTimeout(this.initTimeout);
+      this.initTimeout = null;
+    }
+
+    if (this.initResolve) {
+      this.initResolve(data);
+      this.initResolve = null;
+    }
+
+    messageRouter.off(MSG_TYPES.INIT, this.handleInitEvent);
+  }
+
+  /**
+   * Save: Send the saved state data to the Host via postMessage.
+   */
+  async save(projectState: ProjectFile): Promise<void> {
+    const projectForSave = stripStaticPropsForBoundProject(projectState);
+    const exportData = {
+      canvas: projectForSave.canvas,
+      nodes: projectForSave.nodes,
+      dataSources: projectForSave.dataSources,
+      variables: projectForSave.variables,
+      thumbnail: projectForSave.meta.thumbnail,
+      meta: {
+        ...projectForSave.meta,
+      },
+    };
+
+    messageRouter.send(MSG_TYPES.HOST_SAVE, exportData);
+  }
+
+  /**
+   * Register real-time data push listeners.
+   */
+  setupListeners(): () => void {
+    const handleUpdateSchema = (rawPayload: unknown) => {
+      const payload = rawPayload as { payload?: PlatformFieldItem[] } | PlatformFieldItem[];
+      const fields = ('payload' in payload ? payload.payload : payload) || [];
+
+      if (Array.isArray(fields)) {
+        usePlatformFieldStore.getState().setFields(fields);
+      }
+    };
+
+    const handleUpdateData = (rawPayload: unknown) => {
+      const payload = rawPayload as Record<string, unknown>;
+      const data = (payload.payload || payload.data || payload || {}) as Record<string, unknown>;
+
+      if (!data || typeof data !== 'object') return;
+
+      // Bridge updates to PlatformFieldAdapter via native window event
+      Object.entries(data).forEach(([fieldId, value]) => {
+        window.postMessage(
+          {
+            type: MSG_TYPES.PLATFORM_DATA,
+            payload: { fieldId, value, timestamp: Date.now() },
+          },
+          '*',
+        );
+      });
+    };
+
+    // Assign hooks
+    const cleanupSchema = messageRouter.on('updateSchema', handleUpdateSchema);
+    const cleanupData = messageRouter.on('updateData', handleUpdateData);
+    // Note: we can't use MSG_TYPES safely for 'updateSchema' or 'updateData' since they were missing from the old MSG_TYPES,
+    // so we stick to the literal strings that were present in the old implementation ('updateSchema', 'updateData').
+
+    return () => {
+      messageRouter.off('updateSchema', handleUpdateSchema);
+      messageRouter.off('updateData', handleUpdateData);
+      if (cleanupSchema) cleanupSchema();
+      if (cleanupData) cleanupData();
+    };
+  }
+
+  getUIVisibility(): UIVisibilityConfig {
+    const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    return {
+      showLibrary: params.get('showLibrary') !== '0',
+      showProps: params.get('showProps') !== '0',
+      showTopLeft: params.get('showTopLeft') !== '0',
+      showToolbar: params.get('showToolbar') !== '0',
+      showTopRight: params.get('showTopRight') !== '0',
+      hideProjectDialog: true, // Hide project selection dialog in embedded mode
+    };
+  }
+
+  dispose(): void {
+    this.finishInit(null);
+  }
+}

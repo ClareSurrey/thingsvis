@@ -1,0 +1,18 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-industrial-motor": {
+        "name": "Electric Motor"
+      }
+    },
+    "controls": {
+      "industrial-motor": {
+        "group": "Motor Config",
+        "baseColor": "Base Color",
+        "isRunning": "Is Running",
+        "hasError": "Has Error",
+        "rpm": "RPM Factor"
+      }
+    }
+  }
+}

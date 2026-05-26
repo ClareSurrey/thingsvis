@@ -1,0 +1,38 @@
+{
+  "editor": {
+    "widgets": {
+      "thingsvis-widget-basic-icon": {
+        "name": "Icon",
+        "groupContent": "Content",
+        "groupStyle": "Style",
+        "localIconId": "Local icon",
+        "iconSource": "Icon source",
+        "iconSourceLocal": "Local library",
+        "iconSourceBuiltin": "Lucide icons",
+        "iconName": "Icon",
+        "iconSquare": "Square",
+        "iconCircle": "Circle",
+        "iconTriangle": "Triangle",
+        "iconBolt": "Bolt",
+        "iconStar": "Star",
+        "iconHeart": "Heart",
+        "iconPin": "Pin",
+        "iconBell": "Bell",
+        "iconShieldCheck": "Safety Shield",
+        "iconActivity": "Activity",
+        "iconThermometer": "Thermometer",
+        "iconDroplet": "Droplet",
+        "iconGauge": "Gauge",
+        "iconZap": "Zap",
+        "iconAlertTriangle": "Alert",
+        "iconCheckCircle": "Check",
+        "iconXCircle": "Error",
+        "iconTrendingUp": "Trend Up",
+        "iconTrendingDown": "Trend Down",
+        "iconClock": "Clock",
+        "iconCpu": "CPU",
+        "color": "Icon color"
+      }
+    }
+  }
+}
