@@ -174,7 +174,7 @@ const rows = Array.isArray(payload?.list)
       ? payload
       : [];
 
-// 标准化告警级别
+// 标准化告警级别，测试
 const normalizeLevel = (raw) => {
   const v = String(raw ?? '').toLowerCase().trim();
   // 关键：增加对 M / L / H 的识别！
